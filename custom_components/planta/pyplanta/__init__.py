@@ -1,8 +1,9 @@
 """Planta API client."""
 
 from asyncio import Lock
+from collections.abc import Callable
 import logging
-from typing import Any, Callable, Final
+from typing import Any, Final
 
 from aiohttp import ClientSession
 import jwt
@@ -103,7 +104,7 @@ class Planta:
             result = await self._request(
                 "GET",
                 f"{API_V1_ENDPOINT}/addedPlants",
-                **{"params": {"cursor": cursor} if cursor else {}},
+                params={"cursor": cursor} if cursor else {},
             )
 
             plants.extend(result.get("data", []))

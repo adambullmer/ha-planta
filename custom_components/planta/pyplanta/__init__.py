@@ -1,8 +1,9 @@
 """Planta API client."""
 
 from asyncio import Lock
+from collections.abc import Callable
 import logging
-from typing import Any, Callable, Final
+from typing import Any, Final
 
 from aiohttp import ClientSession
 import jwt
@@ -76,7 +77,7 @@ class Planta:
             if self._refresh_tokens_callback:
                 try:
                     self._refresh_tokens_callback(self.tokens)
-                except Exception as ex:
+                except Exception as ex:  # noqa: BLE001
                     _LOGGER.error(ex)
 
     async def close(self) -> None:
@@ -103,7 +104,7 @@ class Planta:
             result = await self._request(
                 "GET",
                 f"{API_V1_ENDPOINT}/addedPlants",
-                **{"params": {"cursor": cursor} if cursor else {}},
+                params={"cursor": cursor} if cursor else {},
             )
 
             plants.extend(result.get("data", []))

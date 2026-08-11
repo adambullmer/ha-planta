@@ -49,8 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: PlantaConfigEntry) -> bo
         await coordinator.async_config_entry_first_refresh()
     except ConfigEntryAuthFailed:
         raise
-    except Exception as ex:
-        _LOGGER.exception(ex)
+    except Exception:
+        _LOGGER.exception()
 
     if not coordinator.data:
         raise ConfigEntryNotReady

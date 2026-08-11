@@ -72,13 +72,19 @@ class PlantaCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             msg = "Couldn't read from Planta"
             _LOGGER.exception(msg)
             raise UpdateFailed(msg) from ex
+
         if data is None:
             raise ConfigEntryNotReady
 
-        plants = {plant["id"]: plant for plant in data.get("plants", [])}
+        if not isinstance((raw_plants := data.get("plants")), list):
+            raise UpdateFailed("Invalid plant list from Planta")
+
+        plants = {plant["id"]: plant for plant in raw_plants}
         current_plants = {plant_id.split(":")[-1] for plant_id in plants}
 
-        if stale_plants := self.previous_plants - current_plants:
+        if data.get("cursor") is None and (
+            stale_plants := self.previous_plants - current_plants
+        ):
             device_registry = dr.async_get(self.hass)
             for device_id in stale_plants:
                 device = device_registry.async_get_device_by_identifier(

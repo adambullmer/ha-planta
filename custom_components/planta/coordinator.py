@@ -11,6 +11,7 @@ import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
@@ -40,6 +41,17 @@ class PlantaCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             always_update=False,
         )
         self.client = client
+        self.previous_plants: set[str] = set()
+
+        # Initialize previous_plants from the device registry so that
+        # stale devices can be detected on the first update after restart.
+        device_registry = dr.async_get(hass)
+        for device in dr.async_entries_for_config_entry(
+            device_registry, config_entry.entry_id
+        ):
+            for domain, identifier in device.identifiers:
+                if domain == DOMAIN:
+                    self.previous_plants.add(identifier)
 
     def get_plant(self, plant_id: str) -> dict[str, Any] | None:
         """Get a plant by it's id."""
@@ -60,9 +72,29 @@ class PlantaCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             msg = "Couldn't read from Planta"
             _LOGGER.exception(msg)
             raise UpdateFailed(msg) from ex
+
         if data is None:
             raise ConfigEntryNotReady
-        return {plant["id"]: plant for plant in data.get("plants", [])}
+
+        if not isinstance((raw_plants := data.get("plants")), list):
+            raise UpdateFailed("Invalid plant list from Planta")
+
+        plants = {plant["id"]: plant for plant in raw_plants}
+        current_plants = {plant_id.split(":")[-1] for plant_id in plants}
+
+        if data.get("cursor") is None and (
+            stale_plants := self.previous_plants - current_plants
+        ):
+            device_registry = dr.async_get(self.hass)
+            for device_id in stale_plants:
+                device = device_registry.async_get_device_by_identifier(
+                    (DOMAIN, device_id), self.config_entry.entry_id
+                )
+                if device:
+                    device_registry.async_remove_device(device.id)
+        self.previous_plants = current_plants
+
+        return plants
 
     async def async_refresh_plant(self, plant_id: str) -> None:
         """Fetch the latest data for a plant."""

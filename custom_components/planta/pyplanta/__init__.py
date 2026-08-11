@@ -77,7 +77,7 @@ class Planta:
             if self._refresh_tokens_callback:
                 try:
                     self._refresh_tokens_callback(self.tokens)
-                except Exception as ex:
+                except Exception as ex:  # noqa: BLE001
                     _LOGGER.error(ex)
 
     async def close(self) -> None:

@@ -67,21 +67,20 @@ class PlantaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle step setup."""
         errors = {}
 
-        if user_input is not None:
-            if not (errors := await self.validate_client(user_input)):
-                data = {
-                    CONF_TOKEN: json.dumps(self.tokens),
-                }
-                if existing_entry := self.hass.config_entries.async_get_entry(
-                    self.context.get("entry_id")
-                ):
-                    self.hass.config_entries.async_update_entry(
-                        existing_entry, data=data
-                    )
-                    await self.hass.config_entries.async_reload(existing_entry.entry_id)
-                    return self.async_abort(reason="reconfigure_successful")
+        if user_input is not None and not (
+            errors := await self.validate_client(user_input)
+        ):
+            data = {
+                CONF_TOKEN: json.dumps(self.tokens),
+            }
+            if existing_entry := self.hass.config_entries.async_get_entry(
+                self.context.get("entry_id")
+            ):
+                self.hass.config_entries.async_update_entry(existing_entry, data=data)
+                await self.hass.config_entries.async_reload(existing_entry.entry_id)
+                return self.async_abort(reason="reconfigure_successful")
 
-                return self.async_create_entry(title="Planta", data=data)
+            return self.async_create_entry(title="Planta", data=data)
 
         return self.async_show_form(
             step_id=step_id,
@@ -105,7 +104,7 @@ class PlantaConfigFlow(ConfigFlow, domain=DOMAIN):
             errors["base"] = str(err)
         except asyncio.TimeoutError:
             errors["base"] = "timeout_connect"
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except # noqa: BLE001
             _LOGGER.error(ex)
             errors["base"] = "unknown"
         finally:

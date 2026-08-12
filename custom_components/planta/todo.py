@@ -119,7 +119,7 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         items = list(self._todo_items())
-        items = sorted(items, key=lambda t: (t.due, t.description, t.summary))
+        items = sorted(items, key=lambda t: (t.due, t.description or "", t.summary))
         self._attr_todo_items = items
         super()._handle_coordinator_update()
 

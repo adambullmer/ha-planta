@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 import json
 import logging
 from typing import Final
@@ -13,7 +14,7 @@ from homeassistant.components.todo import (
     TodoListEntity,
     TodoListEntityFeature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -26,7 +27,7 @@ from .entity import get_plant_name
 
 _LOGGER = logging.getLogger(__name__)
 
-ACTION_TYPE_SUMMARY_MAP: Final[dict[str, str]] = {
+ACTION_TYPE_MAP: Final[dict[str, str]] = {
     "cleaning": "✨🍃 (Clean)",
     "fertilizing": "🌱💩 (Fertilize)",
     "misting": "💦🌿 (Mist)",
@@ -63,39 +64,46 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}-{description.key}"
 
     def _todo_items(self) -> Iterator[TodoItem]:
-        now = dt_util.now()
+        today = dt_util.now().date()
 
-        for plant_id, plant_data in self.coordinator.data.items():
-            actions = plant_data.get("actions") or {}
+        for plant_id, plant in self.coordinator.data.items():
+            if not (actions := plant.get("actions")) or not isinstance(actions, dict):
+                continue
+
+            plant_name = get_plant_name(plant)
+            site_name = plant.get("site", {}).get("name")
+
             for action_type, details in actions.items():
                 if not isinstance(details, dict):
                     continue
-                if not (next_action := details.get("next")):
-                    continue
-                if not (date_str := next_action.get("date")):
-                    continue
-                if not (due := dt_util.parse_date(date_str[:10])) or due > now.date():
+
+                status = TodoItemStatus.NEEDS_ACTION
+                completed: datetime | None = None
+                if (
+                    (completed_str := (details.get("completed") or {}).get("date"))
+                    and (completed := dt_util.parse_datetime(completed_str))
+                    and completed.astimezone(dt_util.DEFAULT_TIME_ZONE).date() == today
+                ):
+                    due = today
+                    status = TodoItemStatus.COMPLETED
+                elif (
+                    not (next_action := details.get("next"))
+                    or not (date_str := next_action.get("date"))
+                    or not (due := dt_util.parse_date(date_str[:10]))
+                    or due > today
+                ):
                     continue
 
-                completed_str = (details.get("completed") or {}).get("date")
-                completed = (
-                    dt_util.parse_datetime(completed_str) if completed_str else None
-                )
+                action_name = ACTION_TYPE_MAP.get(action_type, action_type.title())
 
                 yield TodoItem(
-                    summary=f"{get_plant_name(plant_data)}: {ACTION_TYPE_SUMMARY_MAP.get(action_type, action_type.title())}",
+                    summary=f"{plant_name}: {action_name}",
                     uid=json.dumps((plant_id, action_type)),
-                    status=TodoItemStatus.NEEDS_ACTION,
+                    status=status,
                     due=due,
-                    description=plant_data["site"]["name"],
+                    description=site_name,
                     completed=completed,
                 )
-
-    @property
-    def todo_items(self) -> list[TodoItem] | None:
-        """Get the current set of To-do items."""
-        items = list(self._todo_items())
-        return sorted(items, key=lambda t: (t.due, t.description, t.summary))
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update a To-do item."""
@@ -106,3 +114,15 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
         plant_id, action_type = json.loads(item.uid)
         await self.coordinator.client.plant_action_complete(plant_id, action_type)
         await self.coordinator.async_refresh_plant(plant_id)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        items = list(self._todo_items())
+        items = sorted(items, key=lambda t: (t.due, t.description, t.summary))
+        self._attr_todo_items = items
+        super()._handle_coordinator_update()
+
+    async def async_added_to_hass(self) -> None:
+        self._handle_coordinator_update()
+        await super().async_added_to_hass()

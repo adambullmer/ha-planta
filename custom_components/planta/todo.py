@@ -70,17 +70,11 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
             for action_type, details in actions.items():
                 if not isinstance(details, dict):
                     continue
-
-                next_action = details.get("next")
-                if not next_action:
+                if not (next_action := details.get("next")):
                     continue
-
-                date_str = next_action.get("date")
-                if not date_str:
+                if not (date_str := next_action.get("date")):
                     continue
-
-                due = dt_util.parse_date(date_str[:10])
-                if due > now.date():
+                if not (due := dt_util.parse_date(date_str[:10])) or due > now.date():
                     continue
 
                 completed_str = (details.get("completed") or {}).get("date")

@@ -176,9 +176,20 @@
       }
     },
     "todo": {
-      "tasks": {
-        "name": "Planta tasks"
+      "today": {
+        "name": "Today's tasks"
+      },
+      "upcoming": {
+        "name": "Upcoming tasks"
       }
+    }
+  },
+  "exceptions": {
+    "complete_only": {
+      "message": "Currently, only marking a task as complete is supported."
+    },
+    "invalid_action": {
+      "message": "The {action} action can only be completed in the Planta app at this time."
     }
   }
 }

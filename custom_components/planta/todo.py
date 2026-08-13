@@ -42,11 +42,16 @@ ALLOWED_ACTIONS: Final[set[str]] = {"cleaning", "fertilizing", "misting", "water
 TODO_LISTS = ("today", "upcoming")
 
 
+def _today() -> date:
+    """Return today's date."""
+    return dt_util.now().date()
+
+
 def _todo_items(
     coordinator: PlantaCoordinator,
 ) -> Iterator[tuple[date, TodoItem]]:
     """Yield to-do items."""
-    today = dt_util.now().date()
+    today = _today()
 
     for plant_id, plant in coordinator.data.items():
         if not (actions := plant.get("actions")) or not isinstance(actions, dict):
@@ -109,7 +114,7 @@ def _get_todo_items(
     end_days: int | None = None,
 ) -> Iterator[TodoItem]:
     """Yield to-do items whose date falls within the window."""
-    today = dt_util.now().date()
+    today = _today()
     lo = today + timedelta(days=start_days) if start_days is not None else None
     hi = today + timedelta(days=end_days) if end_days is not None else None
 
@@ -147,6 +152,16 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
         )
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}-{key}"
 
+        self._today: date | None = None
+
+    @property
+    @override
+    def todo_items(self) -> list[TodoItem] | None:
+        """Return the To-do items in the To-do list."""
+        if self._today != _today():
+            self._handle_coordinator_update()
+        return self._attr_todo_items
+
     @override
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update a To-do item."""
@@ -173,6 +188,7 @@ class PlantaTodoListEntity(CoordinatorEntity[PlantaCoordinator], TodoListEntity)
         items = list(_get_todo_items(self.coordinator, start_days=start, end_days=end))
         items = sorted(items, key=lambda t: (t.due, t.description or "", t.summary))
         self._attr_todo_items = items
+        self._today = _today()
         super()._handle_coordinator_update()
 
     @override

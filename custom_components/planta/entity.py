@@ -11,6 +11,12 @@ from .const import DOMAIN
 from .coordinator import PlantaCoordinator
 
 
+def get_plant_name(plant: dict) -> str:
+    """Get plant name."""
+    names = plant.get("names", {})
+    return names.get("custom") or names.get("localizedName")
+
+
 class PlantaEntity(CoordinatorEntity[PlantaCoordinator]):
     """Base class for Planta entities."""
 
